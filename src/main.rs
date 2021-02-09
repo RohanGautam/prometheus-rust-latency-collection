@@ -31,26 +31,28 @@ fn main() {
             println!("thread 1 {}", duration);
         }
     });
-    // let t2 = std::thread::spawn(move || {
-    //     let mut rng = thread_rng();
-    //     loop {
-    //         let start = std::time::Instant::now();
-    //         std::thread::sleep(std::time::Duration::from_secs(rng.gen_range(10, 20)));
-    //         let duration: u128 = start.elapsed().as_millis();
-    //         track_request_time(duration, "2");
-    //         println!("thread 2");
-    //     }
-    // });
-    // let t3 = std::thread::spawn(move || {
-    //     let mut rng = thread_rng();
-    //     loop {
-    //         let start = std::time::Instant::now();
-    //         std::thread::sleep(std::time::Duration::from_secs(rng.gen_range(1, 3)));
-    //         let duration: u128 = start.elapsed().as_millis();
-    //         track_request_time(duration, "3");
-    //         println!("thread 3");
-    //     }
-    // });
+    let t2 = std::thread::spawn(move || {
+        let mut rng = thread_rng();
+        loop {
+            let start = std::time::Instant::now();
+            std::thread::sleep(std::time::Duration::from_millis(
+                rng.gen_range(10000, 20000),
+            ));
+            let duration: u128 = start.elapsed().as_millis();
+            track_request_time(duration, "2");
+            println!("thread 2");
+        }
+    });
+    let t3 = std::thread::spawn(move || {
+        let mut rng = thread_rng();
+        loop {
+            let start = std::time::Instant::now();
+            std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(1000, 3000)));
+            let duration: u128 = start.elapsed().as_millis();
+            track_request_time(duration, "3");
+            println!("thread 3");
+        }
+    });
 
     let server_task = async move {
         register_custom_metrics();
@@ -64,8 +66,8 @@ fn main() {
     });
     let _ = server.join();
     let _ = t1.join();
-    // let _ = t2.join();
-    // let _ = t3.join();
+    let _ = t2.join();
+    let _ = t3.join();
 }
 
 fn register_custom_metrics() {
