@@ -1,60 +1,83 @@
 #[macro_use]
 extern crate lazy_static;
-use prometheus::{
-    HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts, Registry,
-};
+
+use prometheus::{exponential_buckets, register_histogram_vec, HistogramVec, IntGauge, Registry};
 use rand::prelude::*;
 use std::result::Result;
-use std::time::Duration;
+use tokio::runtime::Runtime;
 use warp::{Filter, Rejection, Reply};
 
-const ENVS: &'static [&'static str] = &["testing", "production"];
-
 lazy_static! {
-    pub static ref RESPONSE_TIME_COLLECTOR: HistogramVec = HistogramVec::new(
-        HistogramOpts::new("response_time", "Response Times"),
-        &["env"]
+    pub static ref THREAD_TIMES: HistogramVec = register_histogram_vec!(
+        "thread_times",
+        "Thread 1 process Times",
+        &["thread_num"],
+        exponential_buckets(0.005, 2.0, 20).unwrap()
     )
     .expect("metric can be created");
+    // pub static ref THREAD_TIMES : IntGauge = IntGauge::new("time_taken", "measure the thead 1 processing tasks over time").expect("metric can be created");
     pub static ref REGISTRY: Registry = Registry::new();
 }
 
-#[tokio::main]
-async fn main() {
-    register_custom_metrics();
+// #[tokio::main]
+fn main() {
+    let t1 = std::thread::spawn(move || {
+        let mut rng = thread_rng();
+        loop {
+            let start = std::time::Instant::now();
+            std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(200, 400)));
+            let duration: u128 = start.elapsed().as_millis();
+            track_request_time(duration, "1");
+            println!("thread 1 {}", duration);
+        }
+    });
+    // let t2 = std::thread::spawn(move || {
+    //     let mut rng = thread_rng();
+    //     loop {
+    //         let start = std::time::Instant::now();
+    //         std::thread::sleep(std::time::Duration::from_secs(rng.gen_range(10, 20)));
+    //         let duration: u128 = start.elapsed().as_millis();
+    //         track_request_time(duration, "2");
+    //         println!("thread 2");
+    //     }
+    // });
+    // let t3 = std::thread::spawn(move || {
+    //     let mut rng = thread_rng();
+    //     loop {
+    //         let start = std::time::Instant::now();
+    //         std::thread::sleep(std::time::Duration::from_secs(rng.gen_range(1, 3)));
+    //         let duration: u128 = start.elapsed().as_millis();
+    //         track_request_time(duration, "3");
+    //         println!("thread 3");
+    //     }
+    // });
 
-    let metrics_route = warp::path!("metrics").and_then(metrics_handler);
-
-    tokio::task::spawn(data_collector());
-
-    println!("Started on port 8080");
-    warp::serve(metrics_route).run(([0, 0, 0, 0], 8080)).await;
+    let server_task = async move {
+        register_custom_metrics();
+        let metrics_route = warp::path!("metrics").and_then(metrics_handler);
+        println!("Started on port 8080");
+        warp::serve(metrics_route).run(([0, 0, 0, 0], 8080)).await;
+    };
+    let server = std::thread::spawn(move || {
+        let mut rt = Runtime::new().unwrap();
+        rt.block_on(server_task);
+    });
+    let _ = server.join();
+    let _ = t1.join();
+    // let _ = t2.join();
+    // let _ = t3.join();
 }
 
 fn register_custom_metrics() {
     REGISTRY
-        .register(Box::new(RESPONSE_TIME_COLLECTOR.clone()))
+        .register(Box::new(THREAD_TIMES.clone()))
         .expect("collector can be registered");
 }
 
-async fn data_collector() {
-    let mut collect_interval = tokio::time::interval(Duration::from_millis(10));
-    loop {
-        collect_interval.tick().await;
-        let mut rng = thread_rng();
-        let response_time: f64 = rng.gen_range(20.0, 300.0);
-        // let response_code: usize = rng.gen_range(100, 599);
-        let env_index: usize = rng.gen_range(0, 2);
-
-        track_request_time(response_time, ENVS.get(env_index).expect("exists"));
-        // track_request_time(response_time, "testing")
-    }
-}
-
-fn track_request_time(response_time: f64, env: &str) {
-    RESPONSE_TIME_COLLECTOR
-        .with_label_values(&[env])
-        .observe(response_time);
+fn track_request_time(response_time: u128, thread_num: &str) {
+    THREAD_TIMES
+        .with_label_values(&[thread_num])
+        .observe(response_time as f64);
 }
 
 async fn metrics_handler() -> Result<impl Reply, Rejection> {
