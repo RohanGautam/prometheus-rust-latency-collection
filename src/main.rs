@@ -11,7 +11,7 @@ lazy_static! {
     pub static ref THREAD_TIMES: HistogramVec = register_histogram_vec!(
         "thread_times",
         "Thread 1 process Times",
-        &["thread_num"],
+        &["thread_num", "batch_size"],
         exponential_buckets(0.005, 2.0, 20).unwrap()
     )
     .expect("metric can be created");
@@ -27,7 +27,7 @@ fn main() {
             let start = std::time::Instant::now();
             std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(200, 400)));
             let duration: u128 = start.elapsed().as_millis();
-            track_request_time(duration, "1");
+            track_request_time(duration, "1", rng.gen_range(1, 6));
             println!("thread 1 {}", duration);
         }
     });
@@ -39,7 +39,7 @@ fn main() {
                 rng.gen_range(10000, 20000),
             ));
             let duration: u128 = start.elapsed().as_millis();
-            track_request_time(duration, "2");
+            track_request_time(duration, "2", rng.gen_range(1, 6));
             println!("thread 2");
         }
     });
@@ -49,16 +49,16 @@ fn main() {
             let start = std::time::Instant::now();
             std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(1000, 3000)));
             let duration: u128 = start.elapsed().as_millis();
-            track_request_time(duration, "3");
+            track_request_time(duration, "3", rng.gen_range(1, 6));
             println!("thread 3");
         }
     });
 
     let server_task = async move {
         register_custom_metrics();
-        let metrics_route = warp::path!("metrics").and_then(metrics_handler);
-        println!("Started on port 8080");
-        warp::serve(metrics_route).run(([0, 0, 0, 0], 8080)).await;
+        let metrics_route = warp::path!("api" / "prometheus").and_then(metrics_handler);
+        println!("Started on port 8081");
+        warp::serve(metrics_route).run(([127, 0, 0, 1], 8081)).await;
     };
     let server = std::thread::spawn(move || {
         let mut rt = Runtime::new().unwrap();
@@ -76,9 +76,9 @@ fn register_custom_metrics() {
         .expect("collector can be registered");
 }
 
-fn track_request_time(response_time: u128, thread_num: &str) {
+fn track_request_time(response_time: u128, thread_num: &str, batch_size: i32) {
     THREAD_TIMES
-        .with_label_values(&[thread_num])
+        .with_label_values(&[thread_num, &batch_size.to_string()])
         .observe(response_time as f64);
 }
 
