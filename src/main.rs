@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use prometheus::{exponential_buckets, register_histogram_vec, HistogramVec, IntGauge, Registry};
+use prometheus::{exponential_buckets, register_histogram_vec, HistogramVec, Registry};
 use rand::prelude::*;
 use std::result::Result;
 use tokio::runtime::Runtime;
