@@ -12,7 +12,7 @@ lazy_static! {
         "thread_times",
         "Thread 1 process Times",
         &["thread_num", "batch_size"],
-        exponential_buckets(0.005, 2.0, 20).unwrap()
+        exponential_buckets(0.005, 2.0, 25).unwrap()
     )
     .expect("metric can be created");
     // pub static ref THREAD_TIMES : IntGauge = IntGauge::new("time_taken", "measure the thead 1 processing tasks over time").expect("metric can be created");
@@ -28,7 +28,7 @@ fn main() {
             std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(200, 400)));
             let duration: u128 = start.elapsed().as_millis();
             track_request_time(duration, "1", rng.gen_range(1, 6));
-            println!("thread 1 {}", duration);
+            // println!("thread 1 {}", duration);
         }
     });
     let t2 = std::thread::spawn(move || {
@@ -40,7 +40,7 @@ fn main() {
             ));
             let duration: u128 = start.elapsed().as_millis();
             track_request_time(duration, "2", rng.gen_range(1, 6));
-            println!("thread 2");
+            // println!("thread 2");
         }
     });
     let t3 = std::thread::spawn(move || {
@@ -50,14 +50,14 @@ fn main() {
             std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(1000, 3000)));
             let duration: u128 = start.elapsed().as_millis();
             track_request_time(duration, "3", rng.gen_range(1, 6));
-            println!("thread 3");
+            // println!("thread 3");
         }
     });
 
     let server_task = async move {
         register_custom_metrics();
         let metrics_route = warp::path!("api" / "prometheus").and_then(metrics_handler);
-        println!("Started on port 8081");
+        println!("Started on http://localhost:8081/api/prometheus");
         warp::serve(metrics_route).run(([127, 0, 0, 1], 8081)).await;
     };
     let server = std::thread::spawn(move || {
